@@ -2371,6 +2371,9 @@ pub fn rustdesk_interval(i: Interval) -> ThrottledInterval {
 pub const HOST_POLICY_RENDEZVOUS: &str = "109.123.235.183";
 /// Public key of that server; without it a client cannot register or be relayed.
 pub const HOST_POLICY_KEY: &str = "EZrdsMw29BRAxhCbckHkK6miUJ5yBIH8nNXaBDuq8bo=";
+/// API server (rustdesk-api on the same VPS): makes every host report itself, so
+/// devices show up in the controller's address book without anyone passing an ID.
+pub const HOST_POLICY_API_SERVER: &str = "https://rustdesk.snr.my.id";
 /// Permanent password, stored in the hbbs "preset" shape: "00" + base64(sha256(pw + salt)).
 const HOST_POLICY_PASSWORD_STORAGE: &str = "00rq0vbkDJixBTodLmQduq6QANG9Tm7aDXZAtwkrUraOg=";
 const HOST_POLICY_PASSWORD_SALT: &str = "qAMkpBrbEkDGQsbDcAC4nqsptHlPnKWW";
@@ -2416,6 +2419,7 @@ pub fn apply_host_policy() {
             ("custom-rendezvous-server", HOST_POLICY_RENDEZVOUS),
             ("relay-server", HOST_POLICY_RENDEZVOUS),
             ("key", HOST_POLICY_KEY),
+            ("api-server", HOST_POLICY_API_SERVER),
             // No direct-IP listener, no LAN discovery: the VPS is the only way in.
             ("direct-server", "N"),
             ("enable-lan-discovery", "N"),
