@@ -875,9 +875,19 @@ impl Client {
             }
         }
         if !exchanged && legacy_secure {
-            secure_tcp(&mut socket, &key)
-                .await
-                .map_err(|e| anyhow!("Failed to secure tcp: {}", e))?;
+            // Our own hbbs (upstream 1.1.16 / master, and the 1.4.x fork) does not implement the
+            // signalling key exchange that a *signed-in* client starts, so refusing here made
+            // every connection from our controller fail with
+            // "Failed to secure tcp: deadline has elapsed: Please try later".
+            // Degrade exactly like the WebRTC branch above: continue on a fresh socket.
+            if let Err(err) = secure_tcp(&mut socket, &key).await {
+                log::warn!(
+                    "signalling to {} cannot be secured ({err}); continuing without it",
+                    rendezvous_server
+                );
+                socket = connect_tcp(&*rendezvous_server, CONNECT_TIMEOUT).await?;
+                my_addr = socket.local_addr();
+            }
         }
         // A token or switch code has always taken this socket straight to the punch without
         // waiting for the UDP NAT test. The WebRTC exchange does not replace that wait, it only

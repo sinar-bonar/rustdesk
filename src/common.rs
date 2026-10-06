@@ -2366,7 +2366,18 @@ pub fn rustdesk_interval(i: Interval) -> ThrottledInterval {
 //   * HARD_SETTINGS    - hard options: no UI/CLI override at all
 //   * BUILTIN_SETTINGS - settings the UI greys out or hides
 //   * OVERWRITE_SETTINGS - fixed options: shown but not editable
+//
+// Build role: `RUSTDESK_BUILD_ROLE=client` produces the controller build (ours
+// only) - it seeds the same server as *defaults* and leaves the UI usable, so a
+// normal client can log in to the address book and change its own settings.
+// Anything else (or unset) builds the locked host.
 // ---------------------------------------------------------------------------
+const BUILD_ROLE: Option<&str> = option_env!("RUSTDESK_BUILD_ROLE");
+
+pub fn is_host_build() -> bool {
+    !matches!(BUILD_ROLE, Some("client"))
+}
+
 /// Rendezvous (ID) + relay server this host is locked to.
 pub const HOST_POLICY_RENDEZVOUS: &str = "109.123.235.183";
 /// Public key of that server; without it a client cannot register or be relayed.
@@ -2382,6 +2393,22 @@ const HOST_POLICY_PASSWORD_SALT: &str = "qAMkpBrbEkDGQsbDcAC4nqsptHlPnKWW";
 pub static HOST_POLICY_RELAY_ONLY: bool = true;
 
 pub fn apply_host_policy() {
+    if !is_host_build() {
+        // Controller build: our server as plain defaults (editable), nothing locked.
+        {
+            let mut d = config::DEFAULT_SETTINGS.write().unwrap();
+            for (k, v) in [
+                ("custom-rendezvous-server", HOST_POLICY_RENDEZVOUS),
+                ("relay-server", HOST_POLICY_RENDEZVOUS),
+                ("key", HOST_POLICY_KEY),
+                ("api-server", HOST_POLICY_API_SERVER),
+            ] {
+                d.insert(k.to_owned(), v.to_owned());
+            }
+        }
+        log::info!("client build: server defaults set to {}", HOST_POLICY_RENDEZVOUS);
+        return;
+    }
     {
         let mut hard = config::HARD_SETTINGS.write().unwrap();
         // Incoming-only: this machine can be controlled, it cannot control others.
