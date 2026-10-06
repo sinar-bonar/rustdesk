@@ -2426,8 +2426,12 @@ pub fn apply_host_policy() {
             // The peer cannot reconfigure us from a remote session.
             ("allow-remote-config-modification", "N"),
             ("allow-remote-cm-modification", "N"),
-            // Relay only: no UDP punch on our side.
-            ("disable-udp", "Y"),
+            // Relay only: no UDP punch on our side. NOTE: keep this "N" — with "Y" the
+            // client takes the TCP rendezvous path (`RendezvousMediator::start`), which
+            // never completes against hbbs (1.1.16 / master / the 1.4.x fork all end in
+            // "deadline has elapsed"), so the host never shows as online. Relay-only is
+            // still enforced in rendezvous_mediator.rs (HOST_POLICY_RELAY_ONLY).
+            ("disable-udp", "N"),
             // WebSocket transport is only for restrictive networks; keeps us on 21115-21117.
             ("allow-websocket", "N"),
             // A customer machine must not swap itself for a stock build.
