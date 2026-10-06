@@ -1060,7 +1060,9 @@ impl RendezvousMediator {
         }
         let peer_addr_v6 = hbb_common::AddrMangle::decode(&ph.socket_addr_v6);
         let local_proxy = use_ws() || Config::is_proxy();
-        let relay = local_proxy || ph.force_relay;
+        // Locked host policy: accept no punched path at all, whatever the peer asks
+        // for. `HOST_POLICY_RELAY_ONLY` is a static, so this cannot be folded away.
+        let relay = local_proxy || ph.force_relay || crate::common::HOST_POLICY_RELAY_ONLY;
         let mut socket_addr_v6 = Default::default();
         let meta = connection_meta(
             ph.control_permissions.clone().into_option(),
@@ -1075,7 +1077,8 @@ impl RendezvousMediator {
         // syncs over IPC, so this (server) process would read the private-server default of "N"
         // and refuse to answer in exactly the self-hosted deployments the transport is for.
         // A proxy still rules it out — ICE would bypass it and leak the real IP.
-        let webrtc_viable = !ph.webrtc_sdp_offer.is_empty()
+        let webrtc_viable = !crate::common::HOST_POLICY_RELAY_ONLY
+            && !ph.webrtc_sdp_offer.is_empty()
             && !Config::is_proxy()
             && (!webrtc_relay_only || WebRTCStream::has_turn_server());
         let webrtc_sdp_answer = if webrtc_viable {

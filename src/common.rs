@@ -2357,7 +2357,91 @@ pub fn rustdesk_interval(i: Interval) -> ThrottledInterval {
     ThrottledInterval::new(i)
 }
 
+// ---------------------------------------------------------------------------
+// Locked host policy (SNR build). See README-HOST.md.
+//
+// Applied in `load_custom_client()`, which every process (service, tray, UI)
+// runs before anything else, so these values cannot be undone from the UI or
+// the command line:
+//   * HARD_SETTINGS    - hard options: no UI/CLI override at all
+//   * BUILTIN_SETTINGS - settings the UI greys out or hides
+//   * OVERWRITE_SETTINGS - fixed options: shown but not editable
+// ---------------------------------------------------------------------------
+/// Rendezvous (ID) + relay server this host is locked to.
+pub const HOST_POLICY_RENDEZVOUS: &str = "109.123.235.183";
+/// Public key of that server; without it a client cannot register or be relayed.
+pub const HOST_POLICY_KEY: &str = "EZrdsMw29BRAxhCbckHkK6miUJ5yBIH8nNXaBDuq8bo=";
+/// Permanent password, stored in the hbbs "preset" shape: "00" + base64(sha256(pw + salt)).
+const HOST_POLICY_PASSWORD_STORAGE: &str = "00rq0vbkDJixBTodLmQduq6QANG9Tm7aDXZAtwkrUraOg=";
+const HOST_POLICY_PASSWORD_SALT: &str = "qAMkpBrbEkDGQsbDcAC4nqsptHlPnKWW";
+/// Never accept a direct/punched/WebRTC path: every session goes through hbbr.
+/// Kept as a static so the compiler does not fold the guards away.
+pub static HOST_POLICY_RELAY_ONLY: bool = true;
+
+pub fn apply_host_policy() {
+    {
+        let mut hard = config::HARD_SETTINGS.write().unwrap();
+        // Incoming-only: this machine can be controlled, it cannot control others.
+        hard.insert("conn-type".to_owned(), "incoming".to_owned());
+        // Lock the settings UI and the command-line setting changes.
+        hard.insert("disable-settings".to_owned(), "Y".to_owned());
+        hard.insert("disable-ab".to_owned(), "Y".to_owned());
+        // Baked permanent password: preset storage wins while local storage is empty.
+        hard.insert("password".to_owned(), HOST_POLICY_PASSWORD_STORAGE.to_owned());
+        hard.insert("salt".to_owned(), HOST_POLICY_PASSWORD_SALT.to_owned());
+    }
+    {
+        let mut builtin = config::BUILTIN_SETTINGS.write().unwrap();
+        builtin.insert(
+            "disable-change-permanent-password".to_owned(),
+            "Y".to_owned(),
+        );
+        builtin.insert("disable-change-id".to_owned(), "Y".to_owned());
+        for k in [
+            "hide-general-settings",
+            "hide-security-settings",
+            "hide-network-settings",
+            "hide-server-settings",
+            "hide-proxy-settings",
+            "hide-websocket-settings",
+            "hide-remote-printer-settings",
+            "hide-stop-service",
+        ] {
+            builtin.insert(k.to_owned(), "Y".to_owned());
+        }
+    }
+    {
+        let mut fixed = config::OVERWRITE_SETTINGS.write().unwrap();
+        for (k, v) in [
+            ("custom-rendezvous-server", HOST_POLICY_RENDEZVOUS),
+            ("relay-server", HOST_POLICY_RENDEZVOUS),
+            ("key", HOST_POLICY_KEY),
+            // No direct-IP listener, no LAN discovery: the VPS is the only way in.
+            ("direct-server", "N"),
+            ("enable-lan-discovery", "N"),
+            // The peer cannot reconfigure us from a remote session.
+            ("allow-remote-config-modification", "N"),
+            ("allow-remote-cm-modification", "N"),
+            // Relay only: no UDP punch on our side.
+            ("disable-udp", "Y"),
+            // WebSocket transport is only for restrictive networks; keeps us on 21115-21117.
+            ("allow-websocket", "N"),
+            // A customer machine must not swap itself for a stock build.
+            ("enable-check-update", "N"),
+            ("allow-auto-update", "N"),
+        ] {
+            fixed.insert(k.to_owned(), v.to_owned());
+        }
+    }
+    log::info!(
+        "host policy applied: locked to {}, relay-only {}, incoming-only",
+        HOST_POLICY_RENDEZVOUS,
+        HOST_POLICY_RELAY_ONLY
+    );
+}
+
 pub fn load_custom_client() {
+    apply_host_policy();
     #[cfg(debug_assertions)]
     if let Ok(data) = std::fs::read_to_string("./custom.txt") {
         read_custom_client(data.trim());
