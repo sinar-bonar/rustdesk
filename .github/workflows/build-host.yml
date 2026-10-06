@@ -1,4 +1,4 @@
-name: Build RustDesk SNR (${{ github.event.inputs.role || 'host' }}, Windows x86_64)
+name: Build RustDesk SNR (Windows x86_64)
 
 on:
   workflow_dispatch:
